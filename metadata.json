@@ -1,0 +1,7 @@
+{
+  "name": "MediVoice AI",
+  "description": "Clinical Support AI Voice Memo powered by Gemini 2.5 Flash. Automates SOAP note generation and transcription from doctor-patient conversations.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
