@@ -148,6 +148,35 @@ const RESPONSE_SCHEMA = {
 // Functions
 // ------------------------------------------------------------------
 
+// ------------------------------------------------------------------
+// Helper: Retry Logic with Exponential Backoff
+// ------------------------------------------------------------------
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  retries: number = 3,
+  delay: number = 1000,
+  backoff: number = 2
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error: any) {
+    // Retry only on 503 (Service Unavailable) or 429 (Too Many Requests)
+    const shouldRetry =
+      retries > 0 &&
+      (error?.message?.includes("503") ||
+        error?.message?.includes("429") ||
+        error?.status === 503 ||
+        error?.status === 429);
+
+    if (shouldRetry) {
+      console.warn(`API Error ${error.status || 'unknown'}. Retrying in ${delay}ms... (${retries} retries left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryWithBackoff(fn, retries - 1, delay * backoff, backoff);
+    }
+    throw error;
+  }
+}
+
 export const generateClinicalNote = async (
   audioBase64: string,
   mode: AppMode,
@@ -177,24 +206,26 @@ export const generateClinicalNote = async (
   }
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: 'audio/webm',
-              data: audioBase64
+    const response = await retryWithBackoff(async () => {
+      return await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                mimeType: 'audio/webm',
+                data: audioBase64
+              }
             }
-          }
-        ]
-      },
-      config: {
-        systemInstruction: finalSystemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: RESPONSE_SCHEMA,
-        temperature: 0.2,
-      }
+          ]
+        },
+        config: {
+          systemInstruction: finalSystemPrompt,
+          responseMimeType: "application/json",
+          responseSchema: RESPONSE_SCHEMA,
+          temperature: 0.2,
+        }
+      });
     });
 
     const jsonText = response.text;
@@ -233,13 +264,15 @@ export const translateText = async (text: string, targetLang: string, apiKey: st
   const targetLangName = langMap[targetLang] || targetLang;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `Translate the following text to ${targetLangName}. Only return the translated text, nothing else.
+    const response = await retryWithBackoff(async () => {
+      return await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Translate the following text to ${targetLangName}. Only return the translated text, nothing else.
       Text: "${text}"`,
-      config: {
-        temperature: 0.1
-      }
+        config: {
+          temperature: 0.1
+        }
+      });
     });
 
     return response.text?.trim() || "";
