@@ -53,7 +53,18 @@ const RecordPage: React.FC = () => {
       const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setStream(audioStream);
 
-      const mediaRecorder = new MediaRecorder(audioStream);
+      // Optimize for speech: mono, lower bitrate (e.g., 32kbps is usually sufficient for speech)
+      // Note: 'audio/webm;codecs=opus' is standard for Chrome/Firefox.
+      const options = {
+        mimeType: 'audio/webm;codecs=opus',
+        audioBitsPerSecond: 32000 // 32kbps
+      };
+
+      // Fallback if specific codec is not supported
+      const mediaRecorder = MediaRecorder.isTypeSupported(options.mimeType)
+        ? new MediaRecorder(audioStream, options)
+        : new MediaRecorder(audioStream);
+
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
@@ -63,7 +74,7 @@ const RecordPage: React.FC = () => {
         }
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(1000); // Request data every 1 second for safety
       setIsRecording(true);
       setShowReviewModal(false);
 
@@ -134,9 +145,23 @@ const RecordPage: React.FC = () => {
           const result = await generateClinicalNote(base64String, mode, apiKey);
           const patientInfo: PatientInfo = { id: patientId, name: patientName };
           navigate('/result', { state: { result, patientInfo } });
-        } catch (apiError) {
-          console.error(apiError);
-          setError("Gemini APIとの通信に失敗しました。APIキーを確認してください。");
+        } catch (apiError: any) {
+          console.error("Gemini API Error Details:", apiError);
+          let errorMessage = "Gemini APIとの通信に失敗しました。";
+
+          if (apiError.message?.includes("400")) {
+            errorMessage += " (リクエスト不正: ファイル形式や長さの問題の可能性があります)";
+          } else if (apiError.message?.includes("401") || apiError.message?.includes("API Key")) {
+            errorMessage += " (APIキーが無効です)";
+          } else if (apiError.message?.includes("429")) {
+            errorMessage += " (利用制限を超過しました)";
+          } else if (apiError.message?.includes("500") || apiError.message?.includes("503")) {
+            errorMessage += " (サーバーエラー: しばらく待ってから再試行してください)";
+          } else {
+            errorMessage += " APIキーやネットワーク接続を確認してください。";
+          }
+
+          setError(errorMessage);
           setIsProcessing(false);
         }
       };

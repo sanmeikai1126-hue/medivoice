@@ -183,7 +183,7 @@ export const generateClinicalNote = async (
         parts: [
           {
             inlineData: {
-              mimeType: 'audio/mp3',
+              mimeType: 'audio/webm',
               data: audioBase64
             }
           }
