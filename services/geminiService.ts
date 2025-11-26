@@ -2,13 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AppMode, GeminiResponse } from '../types';
 
-// NOTE: In a real production app, this API key should be handled via a backend proxy.
-// For this demo, we assume it's in the environment or the user would theoretically provide it.
-// Since we cannot ask for input, we assume process.env.API_KEY is available.
-const apiKey = process.env.API_KEY || ''; 
-
-const ai = new GoogleGenAI({ apiKey });
-
 // ------------------------------------------------------------------
 // 1. 皮膚科カルテ作成用 プロンプト (User Provided)
 // ------------------------------------------------------------------
@@ -157,11 +150,14 @@ const RESPONSE_SCHEMA = {
 
 export const generateClinicalNote = async (
   audioBase64: string,
-  mode: AppMode
+  mode: AppMode,
+  apiKey: string
 ): Promise<GeminiResponse> => {
   if (!apiKey) {
     throw new Error("API Key is missing. Please check your configuration.");
   }
+
+  const ai = new GoogleGenAI({ apiKey });
 
   let finalSystemPrompt = SYSTEM_PROMPT_BASE;
 
@@ -187,7 +183,7 @@ export const generateClinicalNote = async (
         parts: [
           {
             inlineData: {
-              mimeType: 'audio/mp3', 
+              mimeType: 'audio/mp3',
               data: audioBase64
             }
           }
@@ -197,7 +193,7 @@ export const generateClinicalNote = async (
         systemInstruction: finalSystemPrompt,
         responseMimeType: "application/json",
         responseSchema: RESPONSE_SCHEMA,
-        temperature: 0.2, 
+        temperature: 0.2,
       }
     });
 
@@ -213,9 +209,12 @@ export const generateClinicalNote = async (
 };
 
 // Lightweight Text Translation using Gemini 2.5 Flash
-export const translateText = async (text: string, targetLang: string): Promise<string> => {
+export const translateText = async (text: string, targetLang: string, apiKey: string): Promise<string> => {
   if (!text.trim()) return "";
-  
+  if (!apiKey) return text; // Fallback if no key
+
+  const ai = new GoogleGenAI({ apiKey });
+
   const langMap: Record<string, string> = {
     'ja': 'Japanese',
     'en': 'English',
@@ -242,7 +241,7 @@ export const translateText = async (text: string, targetLang: string): Promise<s
         temperature: 0.1
       }
     });
-    
+
     return response.text?.trim() || "";
   } catch (e) {
     console.error("Translation failed:", e);

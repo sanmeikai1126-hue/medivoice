@@ -7,9 +7,12 @@ import Loader from '../components/Loader';
 import { AppMode, PatientInfo, ChatMessage, ChatRole, MedicalRecord } from '../types';
 import { generateClinicalNote, translateText } from '../services/geminiService';
 import { saveRecord } from '../services/storageService';
+import { useApiKey } from '../contexts/ApiKeyContext';
+import ApiKeyModal from '../components/ApiKeyModal';
 
 const RecordPage: React.FC = () => {
   const navigate = useNavigate();
+  const { apiKey } = useApiKey();
 
   // State
   const [patientId, setPatientId] = useState('');
@@ -20,6 +23,7 @@ const RecordPage: React.FC = () => {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
 
   // Translation Mode State
   const [targetLang, setTargetLang] = useState('en');
@@ -39,6 +43,11 @@ const RecordPage: React.FC = () => {
   // Main Audio Recording Logic (SOAP Generation)
   // ----------------------------------------------------------------
   const startMainRecording = async () => {
+    if (!apiKey) {
+      setShowApiKeyModal(true);
+      return;
+    }
+
     try {
       setError(null);
       const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -121,7 +130,8 @@ const RecordPage: React.FC = () => {
         const base64String = (reader.result as string).split(',')[1];
 
         try {
-          const result = await generateClinicalNote(base64String, mode);
+          if (!apiKey) throw new Error("API Key is missing");
+          const result = await generateClinicalNote(base64String, mode, apiKey);
           const patientInfo: PatientInfo = { id: patientId, name: patientName };
           navigate('/result', { state: { result, patientInfo } });
         } catch (apiError) {
@@ -264,9 +274,12 @@ const RecordPage: React.FC = () => {
         if (isFinal) {
           const capturedId = msgId;
           const translateTo = role === ChatRole.DOCTOR ? targetLang : 'ja';
-          translateText(transcript, translateTo).then(translated => {
-            setMessages(prev => prev.map(m => m.id === capturedId ? { ...m, translatedText: translated } : m));
-          });
+          // Use apiKey for translation if available
+          if (apiKey) {
+            translateText(transcript, translateTo, apiKey).then(translated => {
+              setMessages(prev => prev.map(m => m.id === capturedId ? { ...m, translatedText: translated } : m));
+            });
+          }
         }
       }
     };
@@ -289,6 +302,11 @@ const RecordPage: React.FC = () => {
   };
 
   const toggleRoleMic = (role: ChatRole) => {
+    if (!apiKey) {
+      setShowApiKeyModal(true);
+      return;
+    }
+
     if (activeRole === role) {
       stopSpeechRecognition();
     } else {
@@ -406,8 +424,8 @@ const RecordPage: React.FC = () => {
             {messages.map((msg) => (
               <div key={msg.id} className={`flex ${msg.role === ChatRole.DOCTOR ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[80%] rounded-lg p-3 shadow-sm ${msg.role === ChatRole.DOCTOR
-                    ? 'bg-teal-600 text-white rounded-tr-none'
-                    : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
+                  ? 'bg-teal-600 text-white rounded-tr-none'
+                  : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
                   }`}>
                   <div className="text-xs font-bold mb-1 opacity-80">
                     {msg.role === ChatRole.DOCTOR ? '医師 (JP)' : `患者 (${targetLang.toUpperCase()})`}
@@ -442,8 +460,8 @@ const RecordPage: React.FC = () => {
                 <button
                   onClick={() => toggleRoleMic(ChatRole.DOCTOR)}
                   className={`flex-1 py-6 rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center gap-2 ${activeRole === ChatRole.DOCTOR
-                      ? 'bg-teal-600 border-teal-500 text-white ring-4 ring-teal-200 scale-105 shadow-xl'
-                      : 'bg-gray-50 border-gray-200 text-gray-400 opacity-60 hover:opacity-100'
+                    ? 'bg-teal-600 border-teal-500 text-white ring-4 ring-teal-200 scale-105 shadow-xl'
+                    : 'bg-gray-50 border-gray-200 text-gray-400 opacity-60 hover:opacity-100'
                     }`}
                 >
                   <Mic size={32} className={activeRole === ChatRole.DOCTOR ? 'animate-bounce' : ''} />
@@ -468,8 +486,8 @@ const RecordPage: React.FC = () => {
                 <button
                   onClick={() => toggleRoleMic(ChatRole.PATIENT)}
                   className={`flex-1 py-6 rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center gap-2 ${activeRole === ChatRole.PATIENT
-                      ? 'bg-indigo-600 border-indigo-500 text-white ring-4 ring-indigo-200 scale-105 shadow-xl'
-                      : 'bg-gray-50 border-gray-200 text-gray-400 opacity-60 hover:opacity-100'
+                    ? 'bg-indigo-600 border-indigo-500 text-white ring-4 ring-indigo-200 scale-105 shadow-xl'
+                    : 'bg-gray-50 border-gray-200 text-gray-400 opacity-60 hover:opacity-100'
                     }`}
                 >
                   <Mic size={32} className={activeRole === ChatRole.PATIENT ? 'animate-bounce' : ''} />
@@ -496,8 +514,8 @@ const RecordPage: React.FC = () => {
             <button
               onClick={isRecording ? handleStopRequest : startMainRecording}
               className={`w-40 h-40 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl ${isRecording
-                  ? 'bg-red-50 text-red-600 border-4 border-red-500 hover:bg-red-100 hover:scale-105'
-                  : 'bg-teal-600 text-white hover:bg-teal-700 hover:shadow-teal-500/30 hover:scale-105'
+                ? 'bg-red-50 text-red-600 border-4 border-red-500 hover:bg-red-100 hover:scale-105'
+                : 'bg-teal-600 text-white hover:bg-teal-700 hover:shadow-teal-500/30 hover:scale-105'
                 }`}
             >
               {isRecording ? <Square size={48} fill="currentColor" /> : <Mic size={64} />}
@@ -569,6 +587,12 @@ const RecordPage: React.FC = () => {
           Powered by Google Gemini 2.5 Flash & Web Speech API
         </div>
       )}
+
+      <ApiKeyModal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        forceOpen={true}
+      />
     </div>
   );
 };
