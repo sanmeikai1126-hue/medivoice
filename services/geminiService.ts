@@ -205,6 +205,15 @@ export const generateClinicalNote = async (
     `;
   }
 
+  // DEBUG: Log API Key status (masked) and payload size
+  console.log("--- Gemini API Request Debug ---");
+  console.log(`API Key Provided: ${apiKey ? "YES" : "NO"}`);
+  if (apiKey) {
+    console.log(`API Key Prefix: ${apiKey.substring(0, 4)}...`);
+  }
+  console.log(`Audio Data Size: ${audioBase64.length} chars`);
+  console.log("--------------------------------");
+
   try {
     const response = await retryWithBackoff(async () => {
       return await ai.models.generateContent({
