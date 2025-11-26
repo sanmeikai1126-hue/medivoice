@@ -180,7 +180,8 @@ async function retryWithBackoff<T>(
 export const generateClinicalNote = async (
   audioBase64: string,
   mode: AppMode,
-  apiKey: string
+  apiKey: string,
+  mimeType: string = 'audio/webm' // Default to webm for recordings
 ): Promise<GeminiResponse> => {
   if (!apiKey) {
     throw new Error("API Key is missing. Please check your configuration.");
@@ -215,7 +216,7 @@ export const generateClinicalNote = async (
           parts: [
             {
               inlineData: {
-                mimeType: 'audio/webm',
+                mimeType: mimeType,
                 data: audioBase64
               }
             }

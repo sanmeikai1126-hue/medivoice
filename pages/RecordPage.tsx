@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, Square, Globe, AlertCircle, Volume2, Play, FileText, Save, X } from 'lucide-react';
+import { Mic, Square, Globe, AlertCircle, Volume2, Play, FileText, Save, X, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Visualizer from '../components/Visualizer';
 import Loader from '../components/Loader';
@@ -9,6 +9,7 @@ import { generateClinicalNote, translateText } from '../services/geminiService';
 import { saveRecord } from '../services/storageService';
 import { useApiKey } from '../contexts/ApiKeyContext';
 import ApiKeyModal from '../components/ApiKeyModal';
+import FileUploadModal from '../components/FileUploadModal';
 
 const RecordPage: React.FC = () => {
   const navigate = useNavigate();
@@ -24,6 +25,8 @@ const RecordPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [failedAudioBlob, setFailedAudioBlob] = useState<Blob | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   // Translation Mode State
   const [targetLang, setTargetLang] = useState('en');
@@ -107,6 +110,18 @@ const RecordPage: React.FC = () => {
     }
   };
 
+  // Helper: Download audio file
+  const downloadAudioFile = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const stopAndProcessSoap = useCallback(() => {
     if (mediaRecorderRef.current) {
       if (mediaRecorderRef.current.state !== 'inactive') {
@@ -161,12 +176,74 @@ const RecordPage: React.FC = () => {
             errorMessage += " APIキーやネットワーク接続を確認してください。";
           }
 
+          // Save blob for potential download
+          setFailedAudioBlob(blob);
           setError(errorMessage);
           setIsProcessing(false);
         }
       };
     } catch (err) {
       setError("音声データの処理中にエラーが発生しました。");
+      setIsProcessing(false);
+    }
+  };
+
+  // Process uploaded audio file
+  const processUploadedFile = async (file: File) => {
+    if (!apiKey) {
+      setShowApiKeyModal(true);
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onloadend = async () => {
+        const base64String = (reader.result as string).split(',')[1];
+
+        // Determine MIME type
+        let mimeType = 'audio/webm';
+        const fileType = file.type.toLowerCase();
+        const fileName = file.name.toLowerCase();
+
+        if (fileType.includes('mp3') || fileName.endsWith('.mp3')) {
+          mimeType = 'audio/mpeg';
+        } else if (fileType.includes('mp4') || fileName.endsWith('.mp4') || fileName.endsWith('.m4a')) {
+          mimeType = 'audio/mp4';
+        } else if (fileType.includes('webm') || fileName.endsWith('.webm')) {
+          mimeType = 'audio/webm';
+        }
+
+        try {
+          const result = await generateClinicalNote(base64String, mode, apiKey, mimeType);
+          const patientInfo: PatientInfo = { id: patientId, name: patientName };
+          navigate('/result', { state: { result, patientInfo } });
+        } catch (apiError: any) {
+          console.error("Gemini API Error Details:", apiError);
+          let errorMessage = "Gemini APIとの通信に失敗しました。";
+
+          if (apiError.message?.includes("400")) {
+            errorMessage += " (リクエスト不正: ファイル形式や長さの問題の可能性があります)";
+          } else if (apiError.message?.includes("401") || apiError.message?.includes("API Key")) {
+            errorMessage += " (APIキーが無効です)";
+          } else if (apiError.message?.includes("429")) {
+            errorMessage += " (利用制限を超過しました)";
+          } else if (apiError.message?.includes("500") || apiError.message?.includes("503")) {
+            errorMessage += " (サーバーエラー: しばらく待ってから再試行してください)";
+          } else {
+            errorMessage += " APIキーやネットワーク接続を確認してください。";
+          }
+
+          setError(errorMessage);
+          setIsProcessing(false);
+        }
+      };
+    } catch (err) {
+      setError("ファイルの処理中にエラーが発生しました。");
       setIsProcessing(false);
     }
   };
@@ -547,11 +624,26 @@ const RecordPage: React.FC = () => {
             </button>
           </div>
 
-          <div className="w-full max-w-md text-center">
+          <div className="w-full max-w-md text-center space-y-4">
             <p className="text-gray-500 text-lg font-medium mb-4">
               {isRecording ? "録音中... 診療を行ってください" : "ボタンを押して診療を開始"}
             </p>
             <Visualizer stream={stream} isRecording={isRecording} />
+
+            {!isRecording && (
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => setShowUploadModal(true)}
+                  className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition flex items-center justify-center gap-2 mx-auto"
+                >
+                  <Upload size={20} />
+                  ファイルをアップロード
+                </button>
+                <p className="text-xs text-gray-400 mt-2">
+                  事前に録音した音声ファイルを文字起こし
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -601,9 +693,23 @@ const RecordPage: React.FC = () => {
       )}
 
       {error && (
-        <div className="flex items-center gap-2 text-red-600 bg-red-50 px-4 py-3 rounded-lg border border-red-200 text-sm shadow-sm absolute bottom-6 left-6 right-6">
-          <AlertCircle size={16} />
-          {error}
+        <div className="flex flex-col gap-2 text-red-600 bg-red-50 px-4 py-3 rounded-lg border border-red-200 text-sm shadow-sm absolute bottom-6 left-6 right-6">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} />
+            {error}
+          </div>
+          {failedAudioBlob && (
+            <button
+              onClick={() => {
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                downloadAudioFile(failedAudioBlob, `recording_${timestamp}.webm`);
+              }}
+              className="mt-2 px-3 py-2 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 transition flex items-center justify-center gap-2"
+            >
+              <Save size={16} />
+              録音をダウンロード
+            </button>
+          )}
         </div>
       )}
 
@@ -617,6 +723,12 @@ const RecordPage: React.FC = () => {
         isOpen={showApiKeyModal}
         onClose={() => setShowApiKeyModal(false)}
         forceOpen={true}
+      />
+
+      <FileUploadModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        onFileSelected={processUploadedFile}
       />
     </div>
   );
