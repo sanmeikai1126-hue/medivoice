@@ -208,38 +208,73 @@ export const generateClinicalNote = async (
 
 
 
-  try {
-    const response = await retryWithBackoff(async () => {
-      return await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: audioBase64
+
+  // Multi-model fallback: Try 2.5 Flash -> 2.0 Flash -> 1.5 Flash
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash-exp', 'gemini-1.5-flash'];
+  let lastError: any = null;
+
+  for (const model of models) {
+    try {
+      console.log(`Attempting with model: ${model}`);
+
+      const response = await retryWithBackoff(async () => {
+        return await ai.models.generateContent({
+          model: model,
+          contents: {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: audioBase64
+                }
               }
-            }
-          ]
-        },
-        config: {
-          systemInstruction: finalSystemPrompt,
-          responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
-          temperature: 0.2,
-        }
+            ]
+          },
+          config: {
+            systemInstruction: finalSystemPrompt,
+            responseMimeType: "application/json",
+            responseSchema: RESPONSE_SCHEMA,
+            temperature: 0.2,
+          }
+        });
       });
-    });
 
-    const jsonText = response.text;
-    if (!jsonText) throw new Error("No response generated from Gemini.");
+      const jsonText = response.text;
+      if (!jsonText) throw new Error("No response generated from Gemini.");
 
-    return JSON.parse(jsonText) as GeminiResponse;
+      console.log(`✓ Success with model: ${model}`);
+      const result = JSON.parse(jsonText) as GeminiResponse;
+      result.usedModel = model; // Track which model was used
+      return result;
 
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw error;
+    } catch (error: any) {
+      console.error(`Failed with ${model}:`, error.message || error);
+      lastError = error;
+
+      // If it's not a 503/429 error, don't try other models
+      const shouldFallback =
+        error?.message?.includes("503") ||
+        error?.message?.includes("429") ||
+        error?.status === 503 ||
+        error?.status === 429;
+
+      if (!shouldFallback) {
+        console.error("Non-retryable error, stopping fallback");
+        throw error;
+      }
+
+      // If this is the last model, throw the error
+      if (model === models[models.length - 1]) {
+        console.error("All models failed");
+        throw error;
+      }
+
+      console.log(`Falling back to next model...`);
+    }
   }
+
+  // This should never be reached, but TypeScript needs it
+  throw lastError || new Error("All models failed");
 };
 
 // Lightweight Text Translation using Gemini 2.5 Flash

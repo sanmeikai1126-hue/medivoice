@@ -15,6 +15,7 @@ export interface GeminiResponse {
   language: string;
   transcription: TranscriptItem[];
   soap: SoapContent;
+  usedModel?: string; // Model used for generation (e.g., gemini-2.5-flash)
 }
 
 export interface PatientInfo {

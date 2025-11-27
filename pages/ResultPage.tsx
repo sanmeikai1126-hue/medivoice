@@ -99,23 +99,28 @@ const ResultPage: React.FC = () => {
             <ArrowLeft size={20} />
           </button>
           <div>
-             <h2 className="text-lg font-bold text-gray-800 mb-1">結果確認・編集</h2>
-             <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={patientInfo.name} 
-                  onChange={(e) => setPatientInfo({...patientInfo, name: e.target.value})}
-                  placeholder="氏名 (未登録)"
-                  className="text-xs px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-teal-500 focus:border-teal-500 w-32"
-                />
-                <input 
-                  type="text" 
-                  value={patientInfo.id} 
-                  onChange={(e) => setPatientInfo({...patientInfo, id: e.target.value})}
-                  placeholder="ID"
-                  className="text-xs px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-teal-500 focus:border-teal-500 w-24"
-                />
-             </div>
+            <h2 className="text-lg font-bold text-gray-800 mb-1">結果確認・編集</h2>
+            <div className="flex gap-2 items-center">
+              <input
+                type="text"
+                value={patientInfo.name}
+                onChange={(e) => setPatientInfo({ ...patientInfo, name: e.target.value })}
+                placeholder="氏名 (未登録)"
+                className="text-xs px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-teal-500 focus:border-teal-500 w-32"
+              />
+              <input
+                type="text"
+                value={patientInfo.id}
+                onChange={(e) => setPatientInfo({ ...patientInfo, id: e.target.value })}
+                placeholder="ID"
+                className="text-xs px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-teal-500 focus:border-teal-500 w-24"
+              />
+              {state.result.usedModel && (
+                <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded border border-blue-200">
+                  {state.result.usedModel}
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex gap-3">
@@ -137,9 +142,8 @@ const ResultPage: React.FC = () => {
           <button
             onClick={handleSave}
             disabled={isSaved}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-md shadow-sm transition ${
-              isSaved ? 'bg-green-600' : 'bg-teal-600 hover:bg-teal-700'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-md shadow-sm transition ${isSaved ? 'bg-green-600' : 'bg-teal-600 hover:bg-teal-700'
+              }`}
           >
             {isSaved ? <Check size={16} /> : <Save size={16} />}
             {isSaved ? "保存完了" : "完了 (保存)"}
@@ -149,7 +153,7 @@ const ResultPage: React.FC = () => {
 
       {/* Main Content - 2 Columns */}
       <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-        
+
         {/* Left: Transcript */}
         <div className="w-full md:w-1/2 flex flex-col border-r border-gray-200 bg-gray-50">
           <div className="p-3 bg-gray-100 border-b border-gray-200 text-sm font-semibold text-gray-700 uppercase tracking-wider">
@@ -178,7 +182,7 @@ const ResultPage: React.FC = () => {
             SOAP ノート
           </div>
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            
+
             {/* S */}
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-teal-800 font-bold">
