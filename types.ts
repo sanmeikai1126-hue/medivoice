@@ -52,6 +52,4 @@ export interface ChatMessage {
 export enum AIProvider {
   GEMINI = 'GEMINI',
   OPENAI = 'OPENAI',
-  ANTHROPIC = 'ANTHROPIC',
-  DEEPSEEK = 'DEEPSEEK',
 }

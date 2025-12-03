@@ -26,15 +26,9 @@ export const ApiKeyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const geminiKey = localStorage.getItem('gemini_api_key');
         if (geminiKey) keys[AIProvider.GEMINI] = geminiKey;
 
-        // Load others
+        // Load OpenAI key
         const openaiKey = localStorage.getItem('openai_api_key');
         if (openaiKey) keys[AIProvider.OPENAI] = openaiKey;
-
-        const anthropicKey = localStorage.getItem('anthropic_api_key');
-        if (anthropicKey) keys[AIProvider.ANTHROPIC] = anthropicKey;
-
-        const deepseekKey = localStorage.getItem('deepseek_api_key');
-        if (deepseekKey) keys[AIProvider.DEEPSEEK] = deepseekKey;
 
         setApiKeys(keys);
     }, []);

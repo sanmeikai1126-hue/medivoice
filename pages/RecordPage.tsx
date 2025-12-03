@@ -515,10 +515,8 @@ const RecordPage: React.FC = () => {
                   : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
                   } ${isRecording ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                {p === AIProvider.GEMINI && 'Gemini 2.5'}
+                {p === AIProvider.GEMINI && 'Gemini 2.5 Flash'}
                 {p === AIProvider.OPENAI && 'GPT-4o'}
-                {p === AIProvider.ANTHROPIC && 'Claude 3.5'}
-                {p === AIProvider.DEEPSEEK && 'DeepSeek V3'}
               </button>
             ))}
           </div>

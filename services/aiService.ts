@@ -1,7 +1,6 @@
-import { AIProvider, AppMode, GeminiResponse, Type } from '../types';
+import { AIProvider, AppMode, GeminiResponse } from '../types';
 import { generateClinicalNote as generateGemini } from './geminiService';
 import OpenAI from 'openai';
-import Anthropic from '@anthropic-ai/sdk';
 
 // Reusing the prompt from geminiService (copying it here to modify for text-based input)
 // We could export it from geminiService, but for decoupling let's redefine or import if possible.
@@ -157,62 +156,6 @@ const generateOpenAI = async (transcript: string, apiKey: string, model: string 
     };
 };
 
-// Helper: Generate JSON with Anthropic
-const generateAnthropic = async (transcript: string, apiKey: string): Promise<GeminiResponse> => {
-    const anthropic = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-
-    const msg = await anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 4096,
-        system: SYSTEM_PROMPT,
-        messages: [
-            { role: 'user', content: `以下の会話ログを元にカルテを作成してください:\n\n${transcript}\n\nJSON形式で出力してください。` }
-        ]
-    });
-
-    const contentBlock = msg.content[0];
-    if (contentBlock.type !== 'text') throw new Error("Unexpected response type from Anthropic");
-
-    const jsonString = contentBlock.text.match(/\{[\s\S]*\}/)?.[0] || contentBlock.text;
-    const result = JSON.parse(jsonString);
-
-    return {
-        language: result.language || 'ja-JP',
-        transcription: result.transcription || [],
-        soap: result.soap || { s: '', o: '', a: '', p: '' },
-        usedModel: 'claude-3-5-sonnet'
-    };
-};
-
-// Helper: Generate JSON with DeepSeek (via OpenAI SDK)
-const generateDeepSeek = async (transcript: string, apiKey: string): Promise<GeminiResponse> => {
-    const openai = new OpenAI({
-        apiKey,
-        baseURL: 'https://api.deepseek.com',
-        dangerouslyAllowBrowser: true
-    });
-
-    const completion = await openai.chat.completions.create({
-        model: 'deepseek-chat',
-        messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: `以下の会話ログを元にカルテを作成してください:\n\n${transcript}` }
-        ],
-        response_format: { type: "json_object" }
-    });
-
-    const content = completion.choices[0].message.content;
-    if (!content) throw new Error("No content from DeepSeek");
-
-    const result = JSON.parse(content);
-    return {
-        language: result.language || 'ja-JP',
-        transcription: result.transcription || [],
-        soap: result.soap || { s: '', o: '', a: '', p: '' },
-        usedModel: 'deepseek-v3'
-    };
-};
-
 export const generateClinicalNote = async (
     audioBase64: string,
     mode: AppMode,
@@ -250,11 +193,7 @@ export const generateClinicalNote = async (
 
     switch (provider) {
         case AIProvider.OPENAI:
-            return await generateOpenAI(transcript, targetKey, 'gpt-4o'); // Using GPT-4o as "GPT-5 class"
-        case AIProvider.ANTHROPIC:
-            return await generateAnthropic(transcript, targetKey);
-        case AIProvider.DEEPSEEK:
-            return await generateDeepSeek(transcript, targetKey);
+            return await generateOpenAI(transcript, targetKey, 'gpt-4o');
         default:
             throw new Error("Unknown Provider");
     }

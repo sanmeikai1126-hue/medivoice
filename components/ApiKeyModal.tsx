@@ -14,25 +14,13 @@ const PROVIDER_CONFIG = {
         label: 'Google Gemini',
         placeholder: 'AIzaSy...',
         link: 'https://aistudio.google.com/app/apikey',
-        description: '基本モデル (推奨)'
+        description: 'マルチモーダル対応 (推奨)'
     },
     [AIProvider.OPENAI]: {
-        label: 'OpenAI (GPT-5)',
+        label: 'OpenAI',
         placeholder: 'sk-...',
         link: 'https://platform.openai.com/api-keys',
-        description: '高精度・Whisper利用に必須'
-    },
-    [AIProvider.ANTHROPIC]: {
-        label: 'Anthropic (Claude)',
-        placeholder: 'sk-ant-...',
-        link: 'https://console.anthropic.com/settings/keys',
-        description: '自然な文章生成 (要OpenAIキー)'
-    },
-    [AIProvider.DEEPSEEK]: {
-        label: 'DeepSeek',
-        placeholder: 'sk-...',
-        link: 'https://platform.deepseek.com/api_keys',
-        description: 'コスパ重視'
+        description: 'Whisper + GPT-4o'
     }
 };
 
@@ -47,8 +35,6 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, forceOpen = 
             setLocalKeys({
                 [AIProvider.GEMINI]: apiKeys[AIProvider.GEMINI] || '',
                 [AIProvider.OPENAI]: apiKeys[AIProvider.OPENAI] || '',
-                [AIProvider.ANTHROPIC]: apiKeys[AIProvider.ANTHROPIC] || '',
-                [AIProvider.DEEPSEEK]: apiKeys[AIProvider.DEEPSEEK] || '',
             });
         }
     }, [isOpen, apiKeys]);
@@ -159,8 +145,8 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, forceOpen = 
                     <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-xs text-blue-800">
                         <p className="font-bold mb-1">注意:</p>
                         <ul className="list-disc list-inside space-y-1">
-                            <li>Anthropic (Claude) を使用する場合、音声認識のために<strong>OpenAIのキーも必要</strong>です。</li>
                             <li>キーはブラウザ内にのみ保存され、外部サーバーには送信されません。</li>
+                            <li>Gemini: ネイティブ音声処理 / OpenAI: Whisper + GPT-4o</li>
                         </ul>
                     </div>
                 </div>
