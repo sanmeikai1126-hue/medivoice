@@ -1,40 +1,73 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { AIProvider } from '../types';
+
+type ApiKeys = {
+    [key in AIProvider]?: string;
+};
 
 interface ApiKeyContextType {
+    apiKeys: ApiKeys;
+    saveApiKey: (provider: AIProvider, key: string) => void;
+    clearApiKey: (provider: AIProvider) => void;
+    getApiKey: (provider: AIProvider) => string | null;
+    // Legacy support for Gemini (returns Gemini key)
     apiKey: string | null;
-    saveApiKey: (key: string) => void;
-    clearApiKey: () => void;
-    isKeySet: boolean;
+    isKeySet: boolean; // True if Gemini key is set (legacy)
 }
 
 const ApiKeyContext = createContext<ApiKeyContextType | undefined>(undefined);
 
 export const ApiKeyProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [apiKey, setApiKey] = useState<string | null>(null);
-    const [isKeySet, setIsKeySet] = useState(false);
+    const [apiKeys, setApiKeys] = useState<ApiKeys>({});
 
     useEffect(() => {
-        const storedKey = localStorage.getItem('gemini_api_key');
-        if (storedKey) {
-            setApiKey(storedKey);
-            setIsKeySet(true);
-        }
+        const keys: ApiKeys = {};
+        // Load existing Gemini key
+        const geminiKey = localStorage.getItem('gemini_api_key');
+        if (geminiKey) keys[AIProvider.GEMINI] = geminiKey;
+
+        // Load others
+        const openaiKey = localStorage.getItem('openai_api_key');
+        if (openaiKey) keys[AIProvider.OPENAI] = openaiKey;
+
+        const anthropicKey = localStorage.getItem('anthropic_api_key');
+        if (anthropicKey) keys[AIProvider.ANTHROPIC] = anthropicKey;
+
+        const deepseekKey = localStorage.getItem('deepseek_api_key');
+        if (deepseekKey) keys[AIProvider.DEEPSEEK] = deepseekKey;
+
+        setApiKeys(keys);
     }, []);
 
-    const saveApiKey = (key: string) => {
-        localStorage.setItem('gemini_api_key', key);
-        setApiKey(key);
-        setIsKeySet(true);
+    const saveApiKey = (provider: AIProvider, key: string) => {
+        const storageKey = `${provider.toLowerCase()}_api_key`;
+        localStorage.setItem(storageKey, key);
+        setApiKeys(prev => ({ ...prev, [provider]: key }));
     };
 
-    const clearApiKey = () => {
-        localStorage.removeItem('gemini_api_key');
-        setApiKey(null);
-        setIsKeySet(false);
+    const clearApiKey = (provider: AIProvider) => {
+        const storageKey = `${provider.toLowerCase()}_api_key`;
+        localStorage.removeItem(storageKey);
+        setApiKeys(prev => {
+            const newKeys = { ...prev };
+            delete newKeys[provider];
+            return newKeys;
+        });
+    };
+
+    const getApiKey = (provider: AIProvider) => {
+        return apiKeys[provider] || null;
     };
 
     return (
-        <ApiKeyContext.Provider value={{ apiKey, saveApiKey, clearApiKey, isKeySet }}>
+        <ApiKeyContext.Provider value={{
+            apiKeys,
+            saveApiKey,
+            clearApiKey,
+            getApiKey,
+            apiKey: apiKeys[AIProvider.GEMINI] || null,
+            isKeySet: !!apiKeys[AIProvider.GEMINI]
+        }}>
             {children}
         </ApiKeyContext.Provider>
     );

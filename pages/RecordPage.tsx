@@ -4,8 +4,9 @@ import { Mic, Square, Globe, AlertCircle, Volume2, Play, FileText, Save, X, Uplo
 import { useNavigate } from 'react-router-dom';
 import Visualizer from '../components/Visualizer';
 import Loader from '../components/Loader';
-import { AppMode, PatientInfo, ChatMessage, ChatRole, MedicalRecord } from '../types';
-import { generateClinicalNote, translateText } from '../services/geminiService';
+import { AppMode, PatientInfo, ChatMessage, ChatRole, MedicalRecord, AIProvider } from '../types';
+import { generateClinicalNote } from '../services/aiService';
+import { translateText } from '../services/geminiService';
 import { saveRecord } from '../services/storageService';
 import { useApiKey } from '../contexts/ApiKeyContext';
 import ApiKeyModal from '../components/ApiKeyModal';
@@ -13,11 +14,12 @@ import FileUploadModal from '../components/FileUploadModal';
 
 const RecordPage: React.FC = () => {
   const navigate = useNavigate();
-  const { apiKey } = useApiKey();
+  const { apiKeys } = useApiKey();
 
   // State
   const [patientId, setPatientId] = useState('');
   const [patientName, setPatientName] = useState('');
+  const [provider, setProvider] = useState<AIProvider>(AIProvider.GEMINI);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [mode, setMode] = useState<AppMode>(AppMode.STANDARD);
@@ -46,7 +48,14 @@ const RecordPage: React.FC = () => {
   // Main Audio Recording Logic (SOAP Generation)
   // ----------------------------------------------------------------
   const startMainRecording = async () => {
-    if (!apiKey) {
+    // Check if key exists for selected provider
+    if (!apiKeys[provider]) {
+      setShowApiKeyModal(true);
+      return;
+    }
+    // Check dependency for non-Gemini
+    if (provider !== AIProvider.GEMINI && !apiKeys[AIProvider.OPENAI]) {
+      setError("このプロバイダーを使用するにはOpenAIキーも必要です（音声認識用）");
       setShowApiKeyModal(true);
       return;
     }
@@ -156,8 +165,10 @@ const RecordPage: React.FC = () => {
         const base64String = (reader.result as string).split(',')[1];
 
         try {
-          if (!apiKey) throw new Error("API Key is missing");
-          const result = await generateClinicalNote(base64String, mode, apiKey);
+          // Validate keys again just in case
+          if (!apiKeys[provider]) throw new Error(`${provider} API Key is missing`);
+
+          const result = await generateClinicalNote(base64String, mode, provider, apiKeys);
           const patientInfo: PatientInfo = { id: patientId, name: patientName };
           navigate('/result', { state: { result, patientInfo } });
         } catch (apiError: any) {
@@ -190,7 +201,7 @@ const RecordPage: React.FC = () => {
 
   // Process uploaded audio file
   const processUploadedFile = async (file: File) => {
-    if (!apiKey) {
+    if (!apiKeys[provider]) {
       setShowApiKeyModal(true);
       return;
     }
@@ -219,7 +230,7 @@ const RecordPage: React.FC = () => {
         }
 
         try {
-          const result = await generateClinicalNote(base64String, mode, apiKey, mimeType);
+          const result = await generateClinicalNote(base64String, mode, provider, apiKeys, mimeType);
           const patientInfo: PatientInfo = { id: patientId, name: patientName };
           navigate('/result', { state: { result, patientInfo } });
         } catch (apiError: any) {
@@ -376,9 +387,13 @@ const RecordPage: React.FC = () => {
         if (isFinal) {
           const capturedId = msgId;
           const translateTo = role === ChatRole.DOCTOR ? targetLang : 'ja';
-          // Use apiKey for translation if available
-          if (apiKey) {
-            translateText(transcript, translateTo, apiKey).then(translated => {
+          // Use Gemini key for translation if available, or any available key?
+          // translateText uses Gemini 2.5 Flash internally, so it needs Gemini Key.
+          // We should probably fallback or warn if Gemini key is missing but others are present.
+          // For now, let's use apiKeys[AIProvider.GEMINI]
+          const geminiKey = apiKeys[AIProvider.GEMINI];
+          if (geminiKey) {
+            translateText(transcript, translateTo, geminiKey).then(translated => {
               setMessages(prev => prev.map(m => m.id === capturedId ? { ...m, translatedText: translated } : m));
             });
           }
@@ -404,7 +419,11 @@ const RecordPage: React.FC = () => {
   };
 
   const toggleRoleMic = (role: ChatRole) => {
-    if (!apiKey) {
+    // For translation, we need Gemini key ideally, or at least some key.
+    // But translation service is hardcoded to Gemini.
+    if (!apiKeys[AIProvider.GEMINI]) {
+      // Warn or allow but no translation?
+      // Let's prompt for key
       setShowApiKeyModal(true);
       return;
     }
@@ -480,6 +499,29 @@ const RecordPage: React.FC = () => {
           >
             翻訳 (Multi)
           </button>
+        </div>
+
+        {/* Provider Selector */}
+        <div className="md:col-span-3 flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
+          <span className="text-xs font-bold text-gray-500 px-2">AI Model:</span>
+          <div className="flex-1 flex gap-2 overflow-x-auto">
+            {Object.values(AIProvider).map((p) => (
+              <button
+                key={p}
+                onClick={() => setProvider(p)}
+                disabled={isRecording}
+                className={`px-3 py-1.5 rounded text-xs font-medium whitespace-nowrap transition-all ${provider === p
+                  ? 'bg-teal-600 text-white shadow-sm'
+                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                  } ${isRecording ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {p === AIProvider.GEMINI && 'Gemini 2.5'}
+                {p === AIProvider.OPENAI && 'GPT-4o'}
+                {p === AIProvider.ANTHROPIC && 'Claude 3.5'}
+                {p === AIProvider.DEEPSEEK && 'DeepSeek V3'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -715,7 +757,7 @@ const RecordPage: React.FC = () => {
 
       {!showReviewModal && (
         <div className="text-center text-xs text-gray-400">
-          Powered by Google Gemini 2.5 Flash & Web Speech API
+          Powered by {provider} & Web Speech API
         </div>
       )}
 

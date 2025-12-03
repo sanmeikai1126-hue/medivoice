@@ -48,3 +48,10 @@ export interface ChatMessage {
   timestamp: number;
   isFinal: boolean; // 文字起こし確定フラグ
 }
+
+export enum AIProvider {
+  GEMINI = 'GEMINI',
+  OPENAI = 'OPENAI',
+  ANTHROPIC = 'ANTHROPIC',
+  DEEPSEEK = 'DEEPSEEK',
+}
